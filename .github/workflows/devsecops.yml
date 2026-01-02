@@ -1,0 +1,84 @@
+#Title
+name: DevSecOps Pipeline
+
+#Trigger
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+#Jobs - Aqui começam as tarefas do Workflow
+jobs:
+  security-scans:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    
+#CHECKOUT
+#O primeiro passo de qualquer pipeline é baixar o código do repositório para a máquina que vai executar
+#Quando o workflow é disparado, o GitHub cria uma máquina virtual temporária vazia
+#(chamada Runner) para executar os comandos. Essa máquina não tem o código do seu
+#repositório — ela nasce "zerada". O Checkout é o passo que copia o código do repositório
+#para essa máquina, permitindo que as ferramentas (Semgrep, Trivy, Gitleaks) tenham
+#arquivos para escanear. Sem o checkout, não há código para analisar.
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+#Antes de rodar os scans, precisamos criar uma pasta para guardar os relatórios.
+      - name: Criar pasta de relatórios
+        run: mkdir -p security-reports
+#SEM GREP - Instalação
+      - name: Instalar Semgrep
+        run: pip install semgrep
+
+      - name: Executar Semgrep (SAST)
+        run: |
+          semgrep scan \
+            --config auto \
+            --json \
+            --output security-reports/semgrep-report.json \
+            .
+        continue-on-error: true
+#GITLEAKS
+      - name: Executar Gitleaks (Secrets)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+#TRIVY
+      - name: Instalar Trivy
+        run: |
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Executar Trivy (SCA)
+        run: |
+          trivy fs \
+            --format json \
+            --output security-reports/trivy-report.json \
+            --severity HIGH,CRITICAL \
+            .
+        continue-on-error: true
+#UPLOADO DOS RELATÓRIOS
+      - name: Upload dos Relatórios
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: security-reports/
+          retention-days: 30
+
+
+
+
+
+
+
+
+
+
+
+        
