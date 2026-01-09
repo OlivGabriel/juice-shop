@@ -1,0 +1,12 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  security:
+    uses: EVA-Cybersec/.github/.github/workflows/security-scan.yml@main
